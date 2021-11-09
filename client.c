@@ -9,7 +9,7 @@
 #include <sys/time.h>
 
 #define N_OF_PORT 5
-#define BUF_SIZE 65536 // server.c의 message 크기
+#define BUF_SIZE 65536 // server.c의 message 버퍼 크기
 #define SERVER_ADDR "127.0.0.1"
 
 void *run(void *data)
@@ -32,7 +32,7 @@ void *run(void *data)
     }
 
     // 서버로 연결 시도하고 소켓 fd에 연결
-    if (connect(socket_fd, (struct sockaddr *)serv_addr, sizeof(struct sockaddr)) == -1)
+    if (connect(socket_fd, (struct sockaddr *)serv_addr, sizeof(struct sockaddr_in)) == -1)
     {
         printf("Client(port %d): connect failed.\n", port_n);
         exit(-1);
@@ -55,7 +55,7 @@ void *run(void *data)
         struct tm *tm = localtime(&now.tv_sec);
 
         // H:M:S.ms length buffer 형식으로 로깅
-        fprintf(file_fd, "%d:%d:%d.%ld %d %s\n", tm->tm_hour, tm->tm_min, tm->tm_sec, now.tv_usec / 100, recv_len, buffer);
+        fprintf(file_fd, "%d:%d:%d.%ld %d %s\n", tm->tm_hour, tm->tm_min, tm->tm_sec, now.tv_usec / 1000, recv_len, buffer);
     }
 
     // 파일, 소켓 fd 정리
@@ -67,17 +67,26 @@ int main()
 {
     // 포트 수만큼 pthread 준비
     pthread_t thread[N_OF_PORT];
-
+    char server_ad[100];
+    printf("Input server address(IPv4):");
+    scanf("%s", server_ad);
     for (int i = 0; i < N_OF_PORT; i++)
     {
-        // sockaddr_in 구조체 할당
-        struct sockaddr_in* serv_addr = malloc(sizeof(struct sockaddr_in));
-        serv_addr->sin_family = AF_INET; // IPv4
-        serv_addr->sin_addr.s_addr = inet_addr(SERVER_ADDR); // 서버 주소 변환
-        serv_addr->sin_port = htons((i + 1) * 2000); // 포트번호 엔디안 변환, 포트번호는 임의로 2000의 배수로 지정
+        // sockaddr_in 구조체 할당 및 초기화
+        struct sockaddr_in *serv_addr = malloc(sizeof(struct sockaddr_in));
+        memset(serv_addr, 0, sizeof(struct sockaddr_in));
+        serv_addr->sin_family = AF_INET;                     // IPv4
+        serv_addr->sin_addr.s_addr = inet_addr(server_ad); // 서버 주소 변환
+        serv_addr->sin_port = htons((i + 1) * 2000);         // 포트번호 엔디안 변환, 포트번호는 임의로 2000의 배수로 지정
 
         // run 루틴으로 pthread 분기, serv_addr를 payload로 전달
         int res = pthread_create(&thread[i], NULL, run, (void *)serv_addr);
+    }
+
+    // 분기된 스레드가 실행되는동안 main은 sleep
+    while (1)
+    {
+        sleep(100);
     }
 
     return 0;
